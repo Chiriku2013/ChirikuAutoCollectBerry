@@ -1,27 +1,37 @@
 --[[ 
     Auto Collect Berry | Chạy ngay khi execute
-    By Chiriku Roblox | ESP + Smart Hop + Bay thẳng + Auto Team Marines + Store Berry
+    By Chiriku Roblox | ESP + Smart Hop + Auto vào đội + Store Berry
     Hỗ trợ Delta, Solara | Mobile | All Sea
 ]]
 
 -- Cấu hình mặc định
-getgenv().AutoCollectBerry = true
 getgenv().BerrySpeed = 350
-getgenv().Team = "Marines" -- Auto vào đội Marines
+getgenv().Team = "Marines"  -- Auto vào đội Marines
 
 local HopDelay = 0
 local ServerHistory = {}
 local ply = game.Players.LocalPlayer
 
--- Auto vào Team Marines
-repeat wait() until ply.Team
-if getgenv().Team and ply.Team.Name ~= getgenv().Team then
-    for _, team in pairs(game:GetService("Teams"):GetChildren()) do
-        if team.Name == getgenv().Team then
-            game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("SetTeam", getgenv().Team)
+-- Auto vào Team Marines (Đảm bảo chính xác)
+local function joinTeam()
+    if ply.Team and ply.Team.Name ~= getgenv().Team then
+        local teamFound = false
+        for _, team in pairs(game:GetService("Teams"):GetChildren()) do
+            if team.Name == getgenv().Team then
+                teamFound = true
+                game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("SetTeam", getgenv().Team)
+                break
+            end
+        end
+        if not teamFound then
+            warn("Không tìm thấy đội " .. getgenv().Team)
         end
     end
 end
+
+-- Gọi vào team khi mới execute
+repeat wait() until ply.Character
+joinTeam()
 
 -- Anti AFK
 pcall(function()
@@ -120,7 +130,7 @@ spawn(function()
                         CreateESP(v)
                     end
                     To(v.Position)
-                    StoreBerry()
+                    StoreBerry()  -- Lưu Berry khi nhặt được
                     wait(0.2)
                 end
             end
