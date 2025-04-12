@@ -1,151 +1,136 @@
 --[[ 
-    Auto Collect Berry | Chạy ngay khi execute
-    By Chiriku Roblox | ESP + Smart Hop + Auto vào đội + Store Berry
-    Hỗ trợ Delta, Solara | Mobile | All Sea
+    Auto Collect Berry | By: Chiriku Roblox
+    - Tự động nhặt Berry + store
+    - Auto vào đội Marines
+    - Smart Hop + ESP + Bay mượt
+    - Chạy ngay khi execute
 ]]
 
--- Cấu hình mặc định
+getgenv().Team = "Marines"
 getgenv().BerrySpeed = 350
-getgenv().Team = "Marines"  -- Auto vào đội Marines
+getgenv().AutoCollectBerry = true
 
-local HopDelay = 0
-local ServerHistory = {}
-local ply = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+local rs = game:GetService("ReplicatedStorage")
+local tpService = game:GetService("TeleportService")
+local httpService = game:GetService("HttpService")
+local BerryRemote = rs:WaitForChild("Remotes"):FindFirstChild("CommF_")
 
--- Auto vào Team Marines (Đảm bảo chính xác)
-local function joinTeam()
-    if ply.Team and ply.Team.Name ~= getgenv().Team then
-        local teamFound = false
-        for _, team in pairs(game:GetService("Teams"):GetChildren()) do
-            if team.Name == getgenv().Team then
-                teamFound = true
-                game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("SetTeam", getgenv().Team)
-                break
-            end
-        end
-        if not teamFound then
-            warn("Không tìm thấy đội " .. getgenv().Team)
-        end
-    end
+local function Notify(t, msg)
+    game.StarterGui:SetCore("SendNotification", {
+        Title = t,
+        Text = msg,
+        Duration = 5
+    })
 end
 
--- Gọi vào team khi mới execute
-repeat wait() until ply.Character
-joinTeam()
+Notify("Auto Collect Berry", "By: Chiriku Roblox")
+
+-- Auto Join Team
+spawn(function()
+    repeat wait() until lp
+    if lp.Team == nil or lp.Team.Name ~= getgenv().Team then
+        pcall(function()
+            BerryRemote:InvokeServer("SetTeam", getgenv().Team)
+        end)
+    end
+end)
 
 -- Anti AFK
 pcall(function()
     local vu = game:GetService("VirtualUser")
-    ply.Idled:Connect(function()
+    lp.Idled:Connect(function()
         vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
         wait(1)
         vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
     end)
 end)
 
--- Auto Rejoin
-pcall(function()
-    game.CoreGui.RobloxPromptGui.promptOverlay.ChildAdded:Connect(function(c)
-        if c.Name == "ErrorPrompt" then
-            wait(1)
-            game:GetService("TeleportService"):Teleport(game.PlaceId)
-        end
-    end)
-end)
-
--- Bay thẳng
-function To(Pos)
-    local hrp = ply.Character and ply.Character:FindFirstChild("HumanoidRootPart")
+-- Bay đến vị trí
+function To(pos)
+    local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    local dist = (hrp.Position - Pos).Magnitude
-    local time = dist / getgenv().BerrySpeed
+    local dist = (hrp.Position - pos).Magnitude
+    local travelTime = dist / getgenv().BerrySpeed
     local start = tick()
-    while tick() - start < time do
-        if not ply.Character or not hrp then return end
-        hrp.Velocity = Vector3.zero
-        hrp.CFrame = CFrame.new(hrp.Position, Pos) * CFrame.new(0, 0, -getgenv().BerrySpeed * (wait() and 1))
+    while tick() - start < travelTime and (hrp.Position - pos).Magnitude > 10 do
+        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(pos), 0.2)
+        task.wait()
     end
 end
 
--- ESP
-function CreateESP(obj)
-    if obj:FindFirstChild("ESP") then return end
-    local Billboard = Instance.new("BillboardGui", obj)
-    Billboard.Name = "ESP"
-    Billboard.Size = UDim2.new(0, 100, 0, 40)
-    Billboard.AlwaysOnTop = true
-    Billboard.StudsOffset = Vector3.new(0, 2, 0)
+-- ESP Berry
+function CreateESP(part)
+    if part:FindFirstChild("ESP") then return end
+    local bill = Instance.new("BillboardGui", part)
+    bill.Name = "ESP"
+    bill.AlwaysOnTop = true
+    bill.Size = UDim2.new(0, 100, 0, 40)
+    bill.StudsOffset = Vector3.new(0, 2, 0)
 
-    local Text = Instance.new("TextLabel", Billboard)
-    Text.Size = UDim2.new(1, 0, 1, 0)
-    Text.BackgroundTransparency = 1
-    Text.TextColor3 = Color3.fromRGB(255, 255, 0)
-    Text.TextStrokeTransparency = 0
-    Text.Font = Enum.Font.SourceSansBold
-    Text.TextScaled = true
+    local label = Instance.new("TextLabel", bill)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 0)
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.SourceSansBold
+    label.TextScaled = true
 
     spawn(function()
-        while obj and Billboard and Text and Billboard.Parent do
-            local dist = math.floor((ply.Character.HumanoidRootPart.Position - obj.Position).Magnitude)
-            Text.Text = "Berry ["..dist.."m]"
-            wait(0.2)
+        while part and part.Parent and label do
+            local dist = math.floor((lp.Character.HumanoidRootPart.Position - part.Position).Magnitude)
+            label.Text = "Berry ["..dist.."m]"
+            task.wait(0.2)
         end
     end)
-end
-
--- Smart Server Hop
-function Hop()
-    local HttpService = game:GetService("HttpService")
-    local TeleportService = game:GetService("TeleportService")
-    local PlaceId = game.PlaceId
-
-    local req = syn and syn.request or http and http.request or http_request or request
-    local data = HttpService:JSONDecode(req({
-        Url = "https://games.roblox.com/v1/games/"..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
-    }).Body)
-
-    for _, v in pairs(data.data) do
-        if v.id ~= game.JobId and not table.find(ServerHistory, v.id) then
-            table.insert(ServerHistory, v.id)
-            TeleportService:TeleportToPlaceInstance(PlaceId, v.id)
-            break
-        end
-    end
 end
 
 -- Store Berry
 function StoreBerry()
-    game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("CollectBerry")
+    pcall(function()
+        BerryRemote:InvokeServer("CollectBerry")
+    end)
 end
 
--- Auto Collect
+-- Smart Hop
+local UsedServers = {}
+function SmartHop()
+    pcall(function()
+        local servers = httpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?limit=100&sortOrder=Desc")).data
+        for _, v in pairs(servers) do
+            if v.playing < v.maxPlayers and v.id ~= game.JobId and not table.find(UsedServers, v.id) then
+                table.insert(UsedServers, v.id)
+                tpService:TeleportToPlaceInstance(game.PlaceId, v.id)
+                break
+            end
+        end
+    end)
+end
+
+-- Auto Collect Loop
 spawn(function()
-    while wait(1) do
+    while task.wait(1) do
         if getgenv().AutoCollectBerry then
-            local found = false
-            for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("BasePart") and v.Name == "Berry" and v:FindFirstChildWhichIsA("TouchTransmitter") then
-                    found = true
-                    if not v:FindFirstChild("ESP") then
-                        CreateESP(v)
+            local berry = nil
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and obj.Name == "Berry" and obj:FindFirstChildWhichIsA("TouchTransmitter") then
+                    berry = obj
+                    if not obj:FindFirstChild("ESP") then
+                        CreateESP(obj)
                     end
-                    To(v.Position)
-                    StoreBerry()  -- Lưu Berry khi nhặt được
-                    wait(0.2)
+                    break
                 end
             end
-            if not found then
-                warn("Không thấy Berry. Hop ngay...")
-                wait(HopDelay)
-                Hop()
+
+            if berry then
+                To(berry.Position)
+                wait(0.3)
+                StoreBerry()
+            else
+                SmartHop()
+                break
             end
         end
     end
 end)
-
--- Notify
-game.StarterGui:SetCore("SendNotification", {
-    Title = "Auto Collect Berry",
-    Text = "By: Chiriku Roblox",
-    Duration = 6
-})
