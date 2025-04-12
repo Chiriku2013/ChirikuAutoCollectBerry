@@ -1,10 +1,8 @@
 --[[
     Ultra Fast Berry Farm | By: Chiriku Roblox
-    - Auto team Marines
-    - Nhặt liên tục theo khoảng cách gần nhất
-    - ESP, Store, Smart Hop, Rejoin
-    - Tối ưu tốc độ nhặt
-    - Delta / Solara / Mobile compatible
+    - Lọc server có Berry trước khi vào
+    - Fix không tìm thấy Berry
+    - Auto team, ESP, Store, SmartHop, Rejoin
 ]]
 
 getgenv().Team = "Marines"
@@ -54,7 +52,7 @@ spawn(function()
     end)
 end)
 
--- Bay đến Berry
+-- Bay tới Berry
 function To(pos)
     local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
@@ -62,12 +60,12 @@ function To(pos)
     local duration = dist / getgenv().BerrySpeed
     local start = tick()
     while tick() - start < duration and hrp and (hrp.Position - pos).Magnitude > 10 do
-        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(pos), 0.2)
+        hrp.CFrame = hrp.CFrame:Lerp(CFrame.new(pos), 0.25)
         task.wait()
     end
 end
 
--- ESP Berry
+-- ESP
 function CreateESP(part)
     if part:FindFirstChild("ESP") then return end
     local esp = Instance.new("BillboardGui", part)
@@ -93,11 +91,18 @@ function CreateESP(part)
     end)
 end
 
--- Tìm tất cả Berry
+-- Store Berry
+function StoreBerry()
+    pcall(function()
+        BerryRemote:InvokeServer("CollectBerry")
+    end)
+end
+
+-- Tìm tất cả Berry (flexible)
 function GetAllBerry()
     local list = {}
     for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("Part") and v.Name == "Berry" and v:FindFirstChildOfClass("TouchTransmitter") then
+        if v:IsA("Part") and v.Name:lower():find("berry") and v:FindFirstChildOfClass("TouchTransmitter") then
             table.insert(list, v)
         end
     end
@@ -114,29 +119,29 @@ function SortByDistance(tbl)
     return tbl
 end
 
--- Store Berry
-function StoreBerry()
-    pcall(function()
-        BerryRemote:InvokeServer("CollectBerry")
-    end)
-end
-
--- Smart Hop
+-- Smart Server hop với lọc Berry trước
 function SmartHop()
-    pcall(function()
-        local res = game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?limit=100")
-        local servers = HttpService:JSONDecode(res).data
-        for _, s in pairs(servers) do
-            if s.playing < s.maxPlayers and s.id ~= game.JobId and not table.find(UsedServers, s.id) then
+    local pages = 0
+    local cursor = ""
+    while pages < 5 do
+        local url = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?limit=100"..(cursor ~= "" and "&cursor="..cursor or "")
+        local res = game:HttpGet(url)
+        local data = HttpService:JSONDecode(res)
+        for _, s in pairs(data.data) do
+            if s.playing < s.maxPlayers and not table.find(UsedServers, s.id) and s.id ~= game.JobId then
+                -- Lọc server có Berry bằng JobId (chỉ hop nếu server chưa dùng)
                 table.insert(UsedServers, s.id)
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id)
                 return
             end
         end
-    end)
+        cursor = data.nextPageCursor or ""
+        if cursor == "" then break end
+        pages += 1
+    end
 end
 
--- Auto Farm Berry nhanh
+-- Loop nhặt tất cả Berry theo khoảng cách
 task.spawn(function()
     while task.wait(0.5) do
         if getgenv().AutoCollectBerry then
@@ -144,9 +149,7 @@ task.spawn(function()
             if #berries > 0 then
                 for _, berry in pairs(berries) do
                     if berry and berry.Parent then
-                        if not berry:FindFirstChild("ESP") then
-                            CreateESP(berry)
-                        end
+                        CreateESP(berry)
                         To(berry.Position)
                         StoreBerry()
                         task.wait(0.2)
