@@ -1,19 +1,19 @@
 --[[ 
     Auto Collect Berry | Chạy ngay khi execute
-    By Chiriku Roblox | ESP + Smart Hop + Bay thẳng + Auto Team Marines
+    By Chiriku Roblox | ESP + Smart Hop + Bay thẳng + Auto Team Marines + Store Berry
     Hỗ trợ Delta, Solara | Mobile | All Sea
 ]]
 
 -- Cấu hình mặc định
 getgenv().AutoCollectBerry = true
 getgenv().BerrySpeed = 350
-getgenv().Team = "Marines"
+getgenv().Team = "Marines" -- Auto vào đội Marines
 
-local HopDelay = 3
+local HopDelay = 0
 local ServerHistory = {}
 local ply = game.Players.LocalPlayer
 
--- Auto vào Team bằng getgenv().Team
+-- Auto vào Team Marines
 repeat wait() until ply.Team
 if getgenv().Team and ply.Team.Name ~= getgenv().Team then
     for _, team in pairs(game:GetService("Teams"):GetChildren()) do
@@ -103,23 +103,29 @@ function Hop()
     end
 end
 
+-- Store Berry
+function StoreBerry()
+    game:GetService("ReplicatedStorage").Remotes.CommF_:InvokeServer("CollectBerry")
+end
+
 -- Auto Collect
 spawn(function()
     while wait(1) do
         if getgenv().AutoCollectBerry then
             local found = false
             for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("TouchTransmitter") and v.Parent and v.Parent.Name == "Berry" then
+                if v:IsA("BasePart") and v.Name == "Berry" and v:FindFirstChildWhichIsA("TouchTransmitter") then
                     found = true
-                    if not v.Parent:FindFirstChild("ESP") then
-                        CreateESP(v.Parent)
+                    if not v:FindFirstChild("ESP") then
+                        CreateESP(v)
                     end
-                    To(v.Parent.Position)
+                    To(v.Position)
+                    StoreBerry()
                     wait(0.2)
                 end
             end
             if not found then
-                warn("Không thấy Berry. Hop sau 3s...")
+                warn("Không thấy Berry. Hop ngay...")
                 wait(HopDelay)
                 Hop()
             end
